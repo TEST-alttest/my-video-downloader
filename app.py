@@ -7,7 +7,7 @@ import time
 
 # --- 頁面設定 ---
 st.set_page_config(
-    page_title="全能影片下載器 V5.1",
+    page_title="全能影片下載器 V6.0",
     page_icon="⬇️",
     layout="centered"
 )
@@ -65,7 +65,7 @@ def download_video(url):
     timestamp = int(time.time())
     output_path = f"{TEMP_DIR}/video_{timestamp}.%(ext)s"
     
-    # 🔥 V5.1 關鍵修正：改回電腦版 User-Agent，以匹配電腦版 Cookies 🔥
+    # 使用電腦版 User-Agent 以匹配 Cookies
     user_agent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
 
     ydl_opts = {
@@ -100,8 +100,8 @@ def download_video(url):
 
 # --- 主程式介面 ---
 def main():
-    st.title("⬇️ 全能影片下載器 V5.1")
-    st.caption("身分同步版 (解決 IG 驗證衝突)")
+    st.title("⬇️ 全能影片下載器 V6.0")
+    st.caption("強制修正版 (Debug)")
 
     if not os.path.exists(TEMP_DIR): os.makedirs(TEMP_DIR, exist_ok=True)
 
@@ -135,20 +135,23 @@ def main():
         st.markdown(f"🟢 FB 驗證檔：{'**已就緒**' if os.path.exists(FB_COOKIE_FILE) else '未上傳'}")
 
     st.divider()
-    url = st.text_input("貼上影片連結", placeholder="即使貼成 threads.com 也會自動修正...")
+    
+    # 1. 取得原始輸入
+    raw_url = st.text_input("貼上影片連結", placeholder="請貼上網址...")
+    
+    # 2. 🔥 強制即時修正 (不須按按鈕) 🔥
+    clean_url = raw_url.strip() # 去除前後空白
+    if "threads.com" in clean_url:
+        clean_url = clean_url.replace("threads.com", "threads.net")
+        st.info(f"🔧 已自動將 threads.com 修正為：\n{clean_url}")
 
     if st.button("🔍 解析並下載", type="primary", use_container_width=True):
-        if not url:
+        if not clean_url:
             st.warning("請先輸入網址")
         else:
-            # V5.0 修正邏輯保留
-            if "threads.com" in url:
-                url = url.replace("threads.com", "threads.net")
-                st.toast("⚠️ 偵測到錯誤網址，已修正為 threads.net", icon="🔧")
-                time.sleep(1)
-
-            with st.status("🚀 處理中...", expanded=True) as status:
-                file_path, result_msg, used_cookie = download_video(url)
+            # 3. 把乾淨的 clean_url 傳進去，而不是 raw_url
+            with st.status(f"🚀 正在下載：{clean_url} ...", expanded=True) as status:
+                file_path, result_msg, used_cookie = download_video(clean_url)
                 
                 if file_path and os.path.exists(file_path):
                     status.write("✅ 下載成功！")
@@ -161,9 +164,14 @@ def main():
                     status.update(label="完成！", state="complete")
                 else:
                     status.update(label="下載失敗", state="error")
-                    st.error(f"❌ 錯誤: {result_msg}")
-                    if "login required" in str(result_msg).lower():
-                        st.warning("💡 請重新上傳一次 Cookies，並確保輸出後沒有登出 IG。")
+                    st.error(f"❌ 錯誤訊息: {result_msg}")
+                    
+                    # 錯誤診斷
+                    err_str = str(result_msg).lower()
+                    if "unsupported url" in err_str:
+                        st.error("💡 嚴重錯誤：下載引擎看不懂這個網址，請確認 requirements.txt 已更新。")
+                    elif "login required" in err_str:
+                        st.warning("💡 請重新上傳 Cookies (需使用電腦版 Chrome 下載，且下載後不可登出)。")
 
     if st.session_state['downloaded_file'] and os.path.exists(st.session_state['downloaded_file']):
         with open(st.session_state['downloaded_file'], "rb") as file:
