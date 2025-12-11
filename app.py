@@ -7,7 +7,7 @@ import time
 
 # --- 頁面設定 ---
 st.set_page_config(
-    page_title="全能影片下載器 V4.3",
+    page_title="全能影片下載器 V5",
     page_icon="⬇️",
     layout="centered"
 )
@@ -180,3 +180,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
