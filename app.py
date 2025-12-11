@@ -1,11 +1,34 @@
 import streamlit as st
-import yt_dlp
+import subprocess
+import sys
 import os
 import time
-import shutil
+import importlib
 
-# --- V21.0 最終修復版 ---
-st.set_page_config(page_title="全能下載器 V21.0", page_icon="🦄", layout="centered")
+# --- 頁面設定 ---
+st.set_page_config(page_title="全能下載器 V22.0", page_icon="🦄", layout="centered")
+
+# --- 🔥 V22.0 核心修正：在匯入前強制升級 yt-dlp 🔥 ---
+# 這是為了解決 Streamlit 緩存導致引擎過舊，看不懂 .net 網址的問題
+if "libs_fixed" not in st.session_state:
+    try:
+        # 顯示提示
+        placeholder = st.empty()
+        placeholder.warning("正在強制升級下載引擎，請稍候約 10 秒...")
+        
+        # 強制執行 pip install 升級
+        subprocess.check_call([sys.executable, "-m", "pip", "install", "--upgrade", "--force-reinstall", "yt-dlp"])
+        
+        st.session_state["libs_fixed"] = True
+        placeholder.success("✅ 引擎升級完成！")
+        time.sleep(1)
+        placeholder.empty()
+    except Exception as e:
+        st.error(f"引擎更新失敗: {e}")
+
+# 升級後再匯入，並強制重新載入模組
+import yt_dlp
+importlib.reload(yt_dlp) 
 
 # --- 常數設定 ---
 TEMP_DIR = "mobile_downloads"
@@ -18,7 +41,6 @@ if not os.path.exists(TEMP_DIR):
 
 # --- 工具函式 ---
 def safe_clean_temp_dir():
-    # 只刪除舊影片，保留 Cookies
     for f in os.listdir(TEMP_DIR):
         if f.endswith(".mp4") or f.endswith(".webm"):
             try: os.remove(os.path.join(TEMP_DIR, f))
@@ -29,22 +51,26 @@ def download_video(url, use_cookies=True):
     timestamp = int(time.time())
     output_path = f"{TEMP_DIR}/video_{timestamp}.%(ext)s"
     
-    # 1. 強制修正網址 (Threads .com -> .net)
+    # 1. 強制修正網址
     final_url = url.strip()
     if "threads.com" in final_url:
         final_url = final_url.replace("threads.com", "threads.net")
     if "threads.net" in final_url and "?" in final_url:
         final_url = final_url.split("?")[0]
 
-    st.info(f"⚙️ 系統鎖定網址：{final_url}")
+    # 2. 顯示引擎版本與網址 (除錯用)
+    try:
+        ver = yt_dlp.version.__version__
+    except:
+        ver = "未知"
+    st.info(f"⚙️ 引擎版本: {ver} | 鎖定網址: {final_url}")
 
-    # 2. 偽裝設定
+    # 3. 偽裝設定 (iOS API 模式)
     ydl_opts = {
         'format': 'bestvideo+bestaudio/best',
         'outtmpl': output_path,
         'quiet': True,
         'no_warnings': True,
-        # 使用 iOS API 模式避開網頁轉址
         'extractor_args': {'instagram': {'api_host': ['ios'], 'imp_seed': ['yes']}},
         'http_headers': {
             'User-Agent': 'Instagram 219.0.0.12.117 (iPhone13,4; iOS 14_4; en_US; en-US; scale=3.00; 1284x2778; 352306745)',
@@ -52,9 +78,8 @@ def download_video(url, use_cookies=True):
         }
     }
     
-    # 3. 掛載 Cookies
+    # 4. 掛載 Cookies
     if use_cookies:
-        # 只要是 IG 或 Threads，都強制使用 IG 的 Cookies
         if "instagram.com" in final_url or "threads.net" in final_url:
             if os.path.exists(IG_COOKIE_FILE):
                 ydl_opts['cookiefile'] = IG_COOKIE_FILE
@@ -70,14 +95,12 @@ def download_video(url, use_cookies=True):
         return None, None, str(e)
 
 # --- 主介面 ---
-st.title("🦄 全能下載器 V21.0")
-st.caption("免 API Key + 自動修復 Threads")
+st.title("🦄 全能下載器 V22.0")
+st.caption("引擎強制熱更新版")
 
-# 側邊欄：Cookies 管理
+# 側邊欄
 with st.sidebar:
     st.header("🍪 憑證管理")
-    st.info("IG 與 Threads 共用 IG Cookies")
-    
     ig_file = st.file_uploader("上傳 IG Cookies", type=["txt"])
     if ig_file:
         with open(IG_COOKIE_FILE, "wb") as f: f.write(ig_file.getbuffer())
@@ -89,11 +112,10 @@ with st.sidebar:
         st.success("FB 憑證更新！")
 
     if os.path.exists(IG_COOKIE_FILE): st.markdown("✅ **IG 憑證已就緒**")
-    else: st.markdown("❌ **IG 憑證未上傳**")
 
 # 主畫面
-raw_url = st.text_input("貼上影片連結 (支援 FB/IG/Threads/YT)")
-use_cookies = st.checkbox("🍪 掛載憑證下載 (Threads 必選)", value=True)
+raw_url = st.text_input("貼上影片連結")
+use_cookies = st.checkbox("🍪 掛載憑證下載 (必選)", value=True)
 
 if st.button("🚀 解析並下載", type="primary", use_container_width=True):
     if not raw_url:
@@ -106,7 +128,6 @@ if st.button("🚀 解析並下載", type="primary", use_container_width=True):
                 status.write("✅ 下載成功！")
                 status.update(label="完成", state="complete")
                 
-                # 顯示下載按鈕
                 with open(path, "rb") as f:
                     st.download_button(
                         label="📥 儲存影片到手機",
