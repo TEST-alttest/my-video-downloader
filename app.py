@@ -4,11 +4,10 @@ import os
 import shutil
 import json
 import time
-import urllib.parse
 
 # --- 頁面設定 ---
 st.set_page_config(
-    page_title="全能影片下載器 V4.1",
+    page_title="全能影片下載器 V4.2",
     page_icon="⬇️",
     layout="centered"
 )
@@ -24,8 +23,6 @@ if 'downloaded_file' not in st.session_state:
     st.session_state['downloaded_file'] = None
 if 'file_name' not in st.session_state:
     st.session_state['file_name'] = None
-if 'current_url' not in st.session_state:
-    st.session_state['current_url'] = ""
 
 # --- 工具函式 ---
 def safe_clean_temp_dir():
@@ -117,8 +114,8 @@ def download_video(url):
 
 # --- 主程式介面 ---
 def main():
-    st.title("⬇️ 全能影片下載器 V4.1")
-    st.caption("FB / IG / YT / Threads (含 LINE 分享)")
+    st.title("⬇️ 全能影片下載器 V4.2")
+    st.caption("FB / IG / YT / Threads (簡潔版)")
 
     if not os.path.exists(TEMP_DIR):
         os.makedirs(TEMP_DIR, exist_ok=True)
@@ -164,9 +161,6 @@ def main():
         if not url:
             st.warning("請先輸入網址")
         else:
-            # 儲存網址以便分享
-            st.session_state['current_url'] = url
-            
             with st.status("🚀 處理中...", expanded=True) as status:
                 file_path, result_msg, used_cookie = download_video(url)
                 
@@ -188,10 +182,8 @@ def main():
                     if "login required" in err_str:
                         st.warning("💡 請檢查左側是否已上傳對應平台的 Cookies。")
 
-    # --- 下載按鈕與分享區 ---
+    # --- 僅顯示下載按鈕 ---
     if st.session_state['downloaded_file'] and os.path.exists(st.session_state['downloaded_file']):
-        
-        # 1. 檔案下載按鈕
         with open(st.session_state['downloaded_file'], "rb") as file:
             st.download_button(
                 label="📥 儲存影片到手機",
@@ -201,15 +193,6 @@ def main():
                 use_container_width=True,
                 type="primary"
             )
-
-        # 2. LINE 分享連結按鈕
-        st.divider()
-        if st.session_state['current_url']:
-            share_text = f"這影片蠻有趣的，傳給你看看：\n{st.session_state['current_url']}"
-            encoded_text = urllib.parse.quote(share_text)
-            line_share_url = f"https://line.me/R/msg/text/?{encoded_text}"
-            
-            st.link_button("💬 分享連結給 LINE 好友", line_share_url, use_container_width=True)
 
 if __name__ == "__main__":
     main()
