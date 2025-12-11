@@ -6,7 +6,7 @@ import json
 import time
 
 # --- 頁面設定 ---
-st.set_page_config(page_title="全能下載器 V11.0", page_icon="⬇️", layout="centered")
+st.set_page_config(page_title="全能下載器 V12.0", page_icon="⬇️", layout="centered")
 
 # --- 常數 ---
 CONFIG_FILE = "api_key_config.json"
@@ -40,13 +40,15 @@ def save_api_key(key):
 
 if 'user_api_key' not in st.session_state: st.session_state['user_api_key'] = load_api_key()
 
-# --- 下載核心 (V11.0 Threads 優化) ---
+# --- 下載核心 ---
 def download_video(url, use_cookies=True):
     safe_clean_temp_dir()
     timestamp = int(time.time())
     output_path = f"{TEMP_DIR}/video_{timestamp}.%(ext)s"
     
-    # 使用 Windows User-Agent (配合電腦版 Cookies)
+    # 顯示除錯訊息：確認引擎收到的是什麼
+    print(f"DEBUG: Processing URL: {url}")
+    
     user_agent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36'
 
     ydl_opts = {
@@ -59,13 +61,11 @@ def download_video(url, use_cookies=True):
 
     cookie_to_use = None
     if use_cookies:
-        # V11.0 重點：Threads 強制使用 IG 的 Cookies
+        # Threads/IG 共用 IG 餅乾
         if "instagram.com" in url.lower() or "threads.net" in url.lower():
-            if os.path.exists(IG_COOKIE_FILE): 
-                cookie_to_use = IG_COOKIE_FILE
+            if os.path.exists(IG_COOKIE_FILE): cookie_to_use = IG_COOKIE_FILE
         elif "facebook.com" in url.lower() or "fb.watch" in url.lower():
-            if os.path.exists(FB_COOKIE_FILE): 
-                cookie_to_use = FB_COOKIE_FILE
+            if os.path.exists(FB_COOKIE_FILE): cookie_to_use = FB_COOKIE_FILE
         
         if cookie_to_use: ydl_opts['cookiefile'] = cookie_to_use
 
@@ -78,8 +78,8 @@ def download_video(url, use_cookies=True):
 
 # --- 主介面 ---
 def main():
-    st.title("⬇️ 全能下載器 V11.0")
-    st.caption("Threads 網址淨化版")
+    st.title("⬇️ 全能下載器 V12.0")
+    st.caption("Threads 最終修復版")
 
     if not os.path.exists(TEMP_DIR): os.makedirs(TEMP_DIR, exist_ok=True)
 
@@ -91,8 +91,6 @@ def main():
             if st.button("💾"): save_api_key(k)
         
         st.divider()
-        st.info("若下載失敗請更新 Cookies")
-        
         ig_file = st.file_uploader("IG Cookies (通用於 Threads)", type=["txt"], key="ig_uploader")
         if ig_file is not None:
             with open(IG_COOKIE_FILE, "wb") as f: f.write(ig_file.getbuffer())
@@ -103,25 +101,23 @@ def main():
             with open(FB_COOKIE_FILE, "wb") as f: f.write(fb_file.getbuffer())
             st.success("FB Cookies 已更新")
             
-        # 顯示狀態
         if os.path.exists(IG_COOKIE_FILE): st.caption("✅ IG/Threads 憑證已就緒")
-        else: st.caption("❌ IG/Threads 憑證未上傳")
+        try: st.caption(f"Engine: {yt_dlp.version.__version__}")
+        except: pass
 
     st.divider()
     
     raw_url = st.text_input("貼上影片連結")
     real_url = raw_url.strip()
     
-    # 🔥 V11.0: 網址淨化手術 🔥
-    # 1. 修正 .com -> .net
+    # 強制修正邏輯
     if "threads.com" in real_url:
         real_url = real_url.replace("threads.com", "threads.net")
-        st.info("🔧 已修正網址結尾 (.net)")
+        st.toast("🔧 網址已修正為 .net")
     
-    # 2. 切除追蹤碼 (?xmt=...)
+    # 切除參數
     if "threads.net" in real_url and "?" in real_url:
         real_url = real_url.split("?")[0]
-        st.info(f"✂️ 已切除網址雜訊，精簡為：\n{real_url}")
     
     use_cookies_toggle = st.checkbox("🍪 掛載 Cookies (建議勾選)", value=True)
 
@@ -129,6 +125,9 @@ def main():
         if not real_url:
             st.warning("請輸入網址")
         else:
+            # 顯示實際送出的網址 (證據)
+            st.info(f"正在傳送給引擎的網址：\n{real_url}")
+            
             with st.status("🚀 下載中...", expanded=True) as status:
                 path, title, cookie, err_msg = download_video(real_url, use_cookies=use_cookies_toggle)
                 
@@ -141,11 +140,9 @@ def main():
                 else:
                     status.update(label="失敗", state="error")
                     st.error("❌ 下載失敗")
+                    # 顯示引擎吐回來的錯誤
                     with st.expander("查看錯誤原因"):
                         st.code(err_msg, language="text")
-                    
-                    if "Login required" in str(err_msg):
-                         st.warning("💡 Threads 需要登入：請確認左側「IG Cookies」已上傳且未過期。")
 
     if st.session_state['downloaded_file'] and os.path.exists(st.session_state['downloaded_file']):
         with open(st.session_state['downloaded_file'], "rb") as f:
