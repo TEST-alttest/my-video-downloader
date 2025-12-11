@@ -7,7 +7,7 @@ import time
 
 # --- 頁面設定 ---
 st.set_page_config(
-    page_title="全能影片下載器 V4.4",
+    page_title="全能影片下載器 V5",
     page_icon="⬇️",
     layout="centered"
 )
@@ -106,7 +106,7 @@ def download_video(url):
 
 # --- 主程式介面 ---
 def main():
-    st.title("⬇️ 全能影片下載器 V4.4")
+    st.title("⬇️ 全能影片下載器 V5")
     st.caption("支援 Secrets + 網址自動修正")
 
     if not os.path.exists(TEMP_DIR): os.makedirs(TEMP_DIR, exist_ok=True)
@@ -178,3 +178,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
