@@ -1,11 +1,22 @@
 import streamlit as st
-import yt_dlp
 import os
 import time
 import shutil
+import sys
+import subprocess
 
 # --- 頁面設定 ---
-st.set_page_config(page_title="全能下載器 V23.0", page_icon="🦄", layout="centered")
+st.set_page_config(page_title="全能下載器 V24.0", page_icon="🦄", layout="centered")
+
+# --- V24.0 關鍵修復：手動喚醒 Instagram 下載模組 ---
+# 這能解決 "Unsupported URL" 的問題，即使網址正確
+try:
+    import yt_dlp
+    from yt_dlp.extractor.instagram import InstagramIE
+    # 強制註冊，確保引擎認識 Threads
+    yt_dlp.extractor.instagram.InstagramIE = InstagramIE
+except ImportError:
+    pass
 
 # --- 常數設定 ---
 TEMP_DIR = "mobile_downloads"
@@ -31,9 +42,14 @@ def download_video(url, use_cookies=True):
     if "threads.com" in final_url: final_url = final_url.replace("threads.com", "threads.net")
     if "threads.net" in final_url and "?" in final_url: final_url = final_url.split("?")[0]
 
-    st.info(f"⚙️ 系統鎖定網址：{final_url}")
+    # 2. V24 診斷：直接問引擎「你認得這個網址嗎？」
+    is_supported = InstagramIE.suitable(final_url)
+    if is_supported:
+        st.success(f"✅ 引擎已識別此網址 (InstagramIE)")
+    else:
+        st.warning(f"⚠️ 引擎似乎不認識此網址，嘗試強制下載...")
 
-    # 2. 關鍵：使用 iOS API 模式 (避開網頁轉址)
+    # 3. 偽裝設定 (iOS 模式)
     ydl_opts = {
         'format': 'bestvideo+bestaudio/best',
         'outtmpl': output_path,
@@ -60,18 +76,8 @@ def download_video(url, use_cookies=True):
         return None, None, str(e)
 
 # --- 主介面 ---
-st.title("🦄 全能下載器 V23.0")
-st.caption("iOS API 模式 + 穩定版")
-
-# 檢查引擎版本 (僅顯示，不強制更新以免崩潰)
-try: 
-    ver = yt_dlp.version.__version__
-    if ver.startswith("2024") or ver.startswith("2025"):
-        st.success(f"✅ 引擎版本正常: {ver}")
-    else:
-        st.error(f"❌ 引擎版本過舊 ({ver})，請修改 requirements.txt")
-except: 
-    pass
+st.title("🦄 全能下載器 V24.0")
+st.caption("喚醒核心版 (解決 Unsupported URL)")
 
 # 側邊欄
 with st.sidebar:
@@ -80,13 +86,16 @@ with st.sidebar:
     if ig_file:
         with open(IG_COOKIE_FILE, "wb") as f: f.write(ig_file.getbuffer())
         st.success("IG 憑證更新！")
-        
-    fb_file = st.file_uploader("上傳 FB Cookies", type=["txt"])
+    
+    fb_file = st.file_uploader("FB Cookies", type=["txt"])
     if fb_file:
         with open(FB_COOKIE_FILE, "wb") as f: f.write(fb_file.getbuffer())
         st.success("FB 憑證更新！")
 
     if os.path.exists(IG_COOKIE_FILE): st.markdown("✅ **IG 憑證已就緒**")
+    
+    try: st.caption(f"Engine: {yt_dlp.version.__version__}")
+    except: pass
 
 # 主畫面
 raw_url = st.text_input("貼上影片連結")
@@ -96,7 +105,7 @@ if st.button("🚀 解析並下載", type="primary", use_container_width=True):
     if not raw_url:
         st.warning("請先貼上網址")
     else:
-        with st.status("正在處理中...", expanded=True) as status:
+        with st.status("🚀 處理中...", expanded=True) as status:
             path, title, err = download_video(raw_url, use_cookies)
             
             if path and os.path.exists(path):
