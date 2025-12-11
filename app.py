@@ -7,7 +7,7 @@ import time
 import subprocess
 import sys
 
-# --- V18.0 強制依賴更新 ---
+# --- V19.0 強制依賴更新 (確保引擎支援 API 模式) ---
 if 'dep_installed' not in st.session_state:
     try:
         subprocess.check_call([sys.executable, "-m", "pip", "install", "--upgrade", "yt-dlp"])
@@ -15,7 +15,7 @@ if 'dep_installed' not in st.session_state:
     st.session_state['dep_installed'] = True
 
 # --- 頁面設定 ---
-st.set_page_config(page_title="全能下載器 V18.0", page_icon="🦄", layout="centered")
+st.set_page_config(page_title="全能下載器 V19.0", page_icon="🦄", layout="centered")
 
 # --- 常數 ---
 CONFIG_FILE = "api_key_config.json"
@@ -49,54 +49,47 @@ def save_api_key(key):
 
 if 'user_api_key' not in st.session_state: st.session_state['user_api_key'] = load_api_key()
 
-# --- 🔥 V18.0 核心技術：Cookie 權限魔改 🔥 ---
+# --- 🔥 V19.0 核心：Cookie 權限修正 + iOS API 模式 🔥 ---
 def patch_cookies_for_threads(cookie_path):
-    """將 IG 的 Cookie 權限複製一份給 Threads"""
+    # 確保 Cookie 檔案同時擁有 IG 和 Threads 的權限宣告
     try:
         with open(cookie_path, 'r', encoding='utf-8') as f:
-            lines = f.readlines()
+            content = f.read()
         
-        new_lines = []
-        modified = False
-        for line in lines:
-            new_lines.append(line)
-            if ".instagram.com" in line:
-                # 複製一行，把 instagram 改成 threads
-                new_line = line.replace(".instagram.com", ".threads.net")
-                new_lines.append(new_line)
-                modified = True
-        
-        if modified:
+        # 簡單粗暴：如果裡面沒有 threads.net，就把 instagram.com 全部複製一份改成 threads.net 加上去
+        if ".threads.net" not in content and ".instagram.com" in content:
+            new_content = content + "\n" + content.replace(".instagram.com", ".threads.net")
             with open(cookie_path, 'w', encoding='utf-8') as f:
-                f.writelines(new_lines)
+                f.write(new_content)
             return True
-    except:
-        return False
+    except: return False
     return False
 
-# --- 下載核心 ---
 def download_video(raw_url, use_cookies=True):
     safe_clean_temp_dir()
     timestamp = int(time.time())
     output_path = f"{TEMP_DIR}/video_{timestamp}.%(ext)s"
     
-    # 強制修正網址
+    # 1. 強制網址修正
     final_url = raw_url.strip()
     if "threads.com" in final_url: final_url = final_url.replace("threads.com", "threads.net")
     if "threads.net" in final_url and "?" in final_url: final_url = final_url.split("?")[0]
 
-    # V18.0: 偽裝成 Windows (配合你的電腦 Cookie) + 加上 Referer 騙過轉址
-    user_agent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36'
-
+    # 2. V19 關鍵設定：強制使用 iOS API 介面 (徹底避開網頁轉址)
     ydl_opts = {
         'format': 'bestvideo+bestaudio/best',
         'outtmpl': output_path,
         'quiet': True,
         'no_warnings': True,
+        'extractor_args': {
+            'instagram': {
+                'api_host': ['ios'],   # 強制走 iOS API
+                'imp_seed': ['yes']
+            }
+        },
         'http_headers': {
-            'User-Agent': user_agent,
-            'Referer': 'https://www.instagram.com/',  # 🔥 關鍵：騙伺服器我們是從 IG 點過去的
-            'Origin': 'https://www.instagram.com',
+            'User-Agent': 'Instagram 219.0.0.12.117 (iPhone13,4; iOS 14_4; en_US; en-US; scale=3.00; 1284x2778; 352306745)',
+            'Accept-Language': 'en-US',
         }
     }
 
@@ -104,7 +97,7 @@ def download_video(raw_url, use_cookies=True):
     if use_cookies:
         if "instagram.com" in final_url.lower() or "threads.net" in final_url.lower():
             if os.path.exists(IG_COOKIE_FILE):
-                patch_cookies_for_threads(IG_COOKIE_FILE) # 確保權限有寫入
+                patch_cookies_for_threads(IG_COOKIE_FILE)
                 cookie_to_use = IG_COOKIE_FILE
         elif "facebook.com" in final_url.lower() or "fb.watch" in final_url.lower():
             if os.path.exists(FB_COOKIE_FILE): cookie_to_use = FB_COOKIE_FILE
@@ -120,8 +113,8 @@ def download_video(raw_url, use_cookies=True):
 
 # --- 主介面 ---
 def main():
-    st.title("🦄 全能下載器 V18.0")
-    st.markdown("### 防轉址強化版")
+    st.title("🦄 全能下載器 V19.0")
+    st.caption("iOS API 強力模式 (防轉址)")
 
     if not os.path.exists(TEMP_DIR): os.makedirs(TEMP_DIR, exist_ok=True)
 
@@ -133,11 +126,11 @@ def main():
             if st.button("💾"): save_api_key(k)
         
         st.divider()
-        ig_file = st.file_uploader("IG Cookies (Threads 通用)", type=["txt"], key="ig_uploader")
+        ig_file = st.file_uploader("IG Cookies (通用)", type=["txt"], key="ig_uploader")
         if ig_file is not None:
             with open(IG_COOKIE_FILE, "wb") as f: f.write(ig_file.getbuffer())
             patch_cookies_for_threads(IG_COOKIE_FILE)
-            st.success("✅ IG/Threads 憑證已處理")
+            st.success("✅ IG/Threads 憑證已優化")
 
         fb_file = st.file_uploader("FB Cookies", type=["txt"], key="fb_uploader")
         if fb_file is not None:
@@ -145,6 +138,9 @@ def main():
             st.success("✅ FB Cookies 更新成功")
             
         if os.path.exists(IG_COOKIE_FILE): st.caption("✅ IG 憑證: OK")
+        
+        try: st.caption(f"Engine Ver: {yt_dlp.version.__version__}")
+        except: pass
 
     st.divider()
     
@@ -155,9 +151,7 @@ def main():
         if not input_url:
             st.warning("請輸入網址")
         else:
-            st.info(f"🦄 V18 正在處理：\n{input_url}")
-            
-            with st.status("🚀 下載中...", expanded=True) as status:
+            with st.status("🚀 正在呼叫 iOS API 下載...", expanded=True) as status:
                 path, title, cookie, err_msg = download_video(input_url, use_cookies=use_cookies_toggle)
                 
                 if path and os.path.exists(path):
