@@ -6,7 +6,7 @@ import json
 import time
 
 # --- 頁面設定 ---
-st.set_page_config(page_title="全能下載器 V12.0", page_icon="⬇️", layout="centered")
+st.set_page_config(page_title="全能下載器 V13.0", page_icon="🦄", layout="centered")
 
 # --- 常數 ---
 CONFIG_FILE = "api_key_config.json"
@@ -46,9 +46,7 @@ def download_video(url, use_cookies=True):
     timestamp = int(time.time())
     output_path = f"{TEMP_DIR}/video_{timestamp}.%(ext)s"
     
-    # 顯示除錯訊息：確認引擎收到的是什麼
-    print(f"DEBUG: Processing URL: {url}")
-    
+    # 偽裝 Windows
     user_agent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36'
 
     ydl_opts = {
@@ -61,7 +59,7 @@ def download_video(url, use_cookies=True):
 
     cookie_to_use = None
     if use_cookies:
-        # Threads/IG 共用 IG 餅乾
+        # Threads 只要有 IG 餅乾就能過
         if "instagram.com" in url.lower() or "threads.net" in url.lower():
             if os.path.exists(IG_COOKIE_FILE): cookie_to_use = IG_COOKIE_FILE
         elif "facebook.com" in url.lower() or "fb.watch" in url.lower():
@@ -78,8 +76,8 @@ def download_video(url, use_cookies=True):
 
 # --- 主介面 ---
 def main():
-    st.title("⬇️ 全能下載器 V12.0")
-    st.caption("Threads 最終修復版")
+    st.title("🦄 全能下載器 V13.0")
+    st.markdown("### 🔴 如果你沒看到這行紅字，代表沒更新成功！")
 
     if not os.path.exists(TEMP_DIR): os.makedirs(TEMP_DIR, exist_ok=True)
 
@@ -91,18 +89,21 @@ def main():
             if st.button("💾"): save_api_key(k)
         
         st.divider()
-        ig_file = st.file_uploader("IG Cookies (通用於 Threads)", type=["txt"], key="ig_uploader")
+        # V13.0 上傳區
+        ig_file = st.file_uploader("IG Cookies (Threads 通用)", type=["txt"], key="ig_uploader")
         if ig_file is not None:
             with open(IG_COOKIE_FILE, "wb") as f: f.write(ig_file.getbuffer())
-            st.success("IG Cookies 已更新")
+            st.success("✅ IG Cookies 更新成功")
 
         fb_file = st.file_uploader("FB Cookies", type=["txt"], key="fb_uploader")
         if fb_file is not None:
             with open(FB_COOKIE_FILE, "wb") as f: f.write(fb_file.getbuffer())
-            st.success("FB Cookies 已更新")
+            st.success("✅ FB Cookies 更新成功")
             
-        if os.path.exists(IG_COOKIE_FILE): st.caption("✅ IG/Threads 憑證已就緒")
-        try: st.caption(f"Engine: {yt_dlp.version.__version__}")
+        if os.path.exists(IG_COOKIE_FILE): st.caption("✅ IG 憑證: OK")
+        else: st.caption("❌ IG 憑證: 空")
+
+        try: st.caption(f"Engine Ver: {yt_dlp.version.__version__}")
         except: pass
 
     st.divider()
@@ -113,22 +114,22 @@ def main():
     # 強制修正邏輯
     if "threads.com" in real_url:
         real_url = real_url.replace("threads.com", "threads.net")
-        st.toast("🔧 網址已修正為 .net")
+        st.toast("🔧 網址已從 .com 修正為 .net")
     
     # 切除參數
     if "threads.net" in real_url and "?" in real_url:
         real_url = real_url.split("?")[0]
     
-    use_cookies_toggle = st.checkbox("🍪 掛載 Cookies (建議勾選)", value=True)
+    use_cookies_toggle = st.checkbox("🍪 掛載 Cookies", value=True)
 
     if st.button("🔍 解析並下載", type="primary", use_container_width=True):
         if not real_url:
             st.warning("請輸入網址")
         else:
-            # 顯示實際送出的網址 (證據)
-            st.info(f"正在傳送給引擎的網址：\n{real_url}")
+            # 這是 V13.0 的特徵
+            st.info(f"🚀 V13 引擎正在處理：\n{real_url}")
             
-            with st.status("🚀 下載中...", expanded=True) as status:
+            with st.status("處理中...", expanded=True) as status:
                 path, title, cookie, err_msg = download_video(real_url, use_cookies=use_cookies_toggle)
                 
                 if path and os.path.exists(path):
@@ -140,8 +141,7 @@ def main():
                 else:
                     status.update(label="失敗", state="error")
                     st.error("❌ 下載失敗")
-                    # 顯示引擎吐回來的錯誤
-                    with st.expander("查看錯誤原因"):
+                    with st.expander("錯誤詳情"):
                         st.code(err_msg, language="text")
 
     if st.session_state['downloaded_file'] and os.path.exists(st.session_state['downloaded_file']):
