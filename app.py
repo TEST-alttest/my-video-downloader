@@ -2,102 +2,121 @@ import streamlit as st
 import yt_dlp
 import os
 import time
-import json
+import shutil
 
-st.set_page_config(page_title="全能下載器 V20.0", page_icon="🦄", layout="centered")
+# --- V21.0 最終修復版 ---
+st.set_page_config(page_title="全能下載器 V21.0", page_icon="🦄", layout="centered")
 
-# --- 核心除錯顯示 ---
-st.title("🦄 全能下載器 V20.0")
-
-# 獲取引擎版本
-try:
-    ver = yt_dlp.version.__version__
-except:
-    ver = "未知"
-
-# 判斷版本是否合格 (2024.11.04 以後才支援 Threads 較好)
-if ver.startswith("2024") or ver.startswith("2025"):
-    st.success(f"✅ 下載引擎版本正常：{ver}")
-else:
-    st.error(f"❌ 下載引擎版本過舊：{ver}")
-    st.info("請務必去 GitHub 修改 requirements.txt 為：\n`yt-dlp>=2024.11.04`")
-
-# --- 常數與設定 ---
-CONFIG_FILE = "api_key_config.json"
+# --- 常數設定 ---
 TEMP_DIR = "mobile_downloads"
 IG_COOKIE_FILE = os.path.join(TEMP_DIR, "ig_cookies.txt")
 FB_COOKIE_FILE = os.path.join(TEMP_DIR, "fb_cookies.txt")
 
-if not os.path.exists(TEMP_DIR): os.makedirs(TEMP_DIR, exist_ok=True)
+# 確保目錄存在
+if not os.path.exists(TEMP_DIR):
+    os.makedirs(TEMP_DIR, exist_ok=True)
 
-# --- 側邊欄 ---
-with st.sidebar:
-    st.header("設定")
-    if "GEMINI_API_KEY" in st.secrets: st.success("🔒 雲端 Key 使用中")
-    
-    st.divider()
-    ig_file = st.file_uploader("IG Cookies", type=["txt"])
-    if ig_file:
-        with open(IG_COOKIE_FILE, "wb") as f: f.write(ig_file.getbuffer())
-        st.success("IG Cookies 更新")
-        
-    fb_file = st.file_uploader("FB Cookies", type=["txt"])
-    if fb_file:
-        with open(FB_COOKIE_FILE, "wb") as f: f.write(fb_file.getbuffer())
-        st.success("FB Cookies 更新")
+# --- 工具函式 ---
+def safe_clean_temp_dir():
+    # 只刪除舊影片，保留 Cookies
+    for f in os.listdir(TEMP_DIR):
+        if f.endswith(".mp4") or f.endswith(".webm"):
+            try: os.remove(os.path.join(TEMP_DIR, f))
+            except: pass
 
-# --- 下載邏輯 ---
 def download_video(url, use_cookies=True):
-    # 簡易版下載邏輯，專注於成功率
+    safe_clean_temp_dir()
     timestamp = int(time.time())
     output_path = f"{TEMP_DIR}/video_{timestamp}.%(ext)s"
     
+    # 1. 強制修正網址 (Threads .com -> .net)
+    final_url = url.strip()
+    if "threads.com" in final_url:
+        final_url = final_url.replace("threads.com", "threads.net")
+    if "threads.net" in final_url and "?" in final_url:
+        final_url = final_url.split("?")[0]
+
+    st.info(f"⚙️ 系統鎖定網址：{final_url}")
+
+    # 2. 偽裝設定
     ydl_opts = {
         'format': 'bestvideo+bestaudio/best',
         'outtmpl': output_path,
         'quiet': True,
-        'http_headers': {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36'}
+        'no_warnings': True,
+        # 使用 iOS API 模式避開網頁轉址
+        'extractor_args': {'instagram': {'api_host': ['ios'], 'imp_seed': ['yes']}},
+        'http_headers': {
+            'User-Agent': 'Instagram 219.0.0.12.117 (iPhone13,4; iOS 14_4; en_US; en-US; scale=3.00; 1284x2778; 352306745)',
+            'Accept-Language': 'en-US',
+        }
     }
     
-    # 掛載 Cookies
+    # 3. 掛載 Cookies
     if use_cookies:
-        if "threads" in url or "instagram" in url:
-            if os.path.exists(IG_COOKIE_FILE): ydl_opts['cookiefile'] = IG_COOKIE_FILE
-        elif "facebook" in url or "fb.watch" in url:
-            if os.path.exists(FB_COOKIE_FILE): ydl_opts['cookiefile'] = FB_COOKIE_FILE
+        # 只要是 IG 或 Threads，都強制使用 IG 的 Cookies
+        if "instagram.com" in final_url or "threads.net" in final_url:
+            if os.path.exists(IG_COOKIE_FILE):
+                ydl_opts['cookiefile'] = IG_COOKIE_FILE
+        elif "facebook.com" in final_url or "fb.watch" in final_url:
+            if os.path.exists(FB_COOKIE_FILE):
+                ydl_opts['cookiefile'] = FB_COOKIE_FILE
 
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(url, download=True)
+            info = ydl.extract_info(final_url, download=True)
             return ydl.prepare_filename(info), info.get('title', 'video'), None
     except Exception as e:
         return None, None, str(e)
 
-# --- 主畫面 ---
-raw_url = st.text_input("貼上影片連結")
-if st.button("解析並下載", type="primary", use_container_width=True):
+# --- 主介面 ---
+st.title("🦄 全能下載器 V21.0")
+st.caption("免 API Key + 自動修復 Threads")
+
+# 側邊欄：Cookies 管理
+with st.sidebar:
+    st.header("🍪 憑證管理")
+    st.info("IG 與 Threads 共用 IG Cookies")
+    
+    ig_file = st.file_uploader("上傳 IG Cookies", type=["txt"])
+    if ig_file:
+        with open(IG_COOKIE_FILE, "wb") as f: f.write(ig_file.getbuffer())
+        st.success("IG 憑證更新！")
+        
+    fb_file = st.file_uploader("上傳 FB Cookies", type=["txt"])
+    if fb_file:
+        with open(FB_COOKIE_FILE, "wb") as f: f.write(fb_file.getbuffer())
+        st.success("FB 憑證更新！")
+
+    if os.path.exists(IG_COOKIE_FILE): st.markdown("✅ **IG 憑證已就緒**")
+    else: st.markdown("❌ **IG 憑證未上傳**")
+
+# 主畫面
+raw_url = st.text_input("貼上影片連結 (支援 FB/IG/Threads/YT)")
+use_cookies = st.checkbox("🍪 掛載憑證下載 (Threads 必選)", value=True)
+
+if st.button("🚀 解析並下載", type="primary", use_container_width=True):
     if not raw_url:
-        st.warning("請輸入網址")
+        st.warning("請先貼上網址")
     else:
-        # 自動修正網址
-        real_url = raw_url.strip()
-        if "threads.com" in real_url: real_url = real_url.replace("threads.com", "threads.net")
-        if "threads.net" in real_url and "?" in real_url: real_url = real_url.split("?")[0]
-        
-        st.caption(f"目標網址: {real_url}")
-        
-        with st.status("執行中...", expanded=True) as status:
-            path, title, err = download_video(real_url)
+        with st.status("正在處理中...", expanded=True) as status:
+            path, title, err = download_video(raw_url, use_cookies)
             
             if path and os.path.exists(path):
-                status.write("✅ 成功！")
-                st.session_state['file_path'] = path
+                status.write("✅ 下載成功！")
                 status.update(label="完成", state="complete")
+                
+                # 顯示下載按鈕
+                with open(path, "rb") as f:
+                    st.download_button(
+                        label="📥 儲存影片到手機",
+                        data=f,
+                        file_name=f"video.mp4",
+                        mime="video/mp4",
+                        use_container_width=True,
+                        type="primary"
+                    )
             else:
                 status.update(label="失敗", state="error")
-                st.error("下載失敗")
+                st.error("❌ 下載失敗")
                 st.code(err)
-
-if 'file_path' in st.session_state and st.session_state['file_path'] and os.path.exists(st.session_state['file_path']):
-    with open(st.session_state['file_path'], "rb") as f:
-        st.download_button("📥 儲存影片", f, file_name="video.mp4", mime="video/mp4", use_container_width=True, type="primary")
