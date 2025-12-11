@@ -7,7 +7,7 @@ import time
 
 # --- 頁面設定 ---
 st.set_page_config(
-    page_title="全能影片下載器 V5.0",
+    page_title="全能影片下載器 V5.1",
     page_icon="⬇️",
     layout="centered"
 )
@@ -65,7 +65,8 @@ def download_video(url):
     timestamp = int(time.time())
     output_path = f"{TEMP_DIR}/video_{timestamp}.%(ext)s"
     
-    user_agent = 'Mozilla/5.0 (iPhone; CPU iPhone OS 14_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0 Mobile/15E148 Safari/604.1'
+    # 🔥 V5.1 關鍵修正：改回電腦版 User-Agent，以匹配電腦版 Cookies 🔥
+    user_agent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
 
     ydl_opts = {
         'format': 'bestvideo+bestaudio/best',
@@ -99,8 +100,8 @@ def download_video(url):
 
 # --- 主程式介面 ---
 def main():
-    st.title("⬇️ 全能影片下載器 V5.0")
-    st.caption("自動修正 Threads 網址錯誤")
+    st.title("⬇️ 全能影片下載器 V5.1")
+    st.caption("身分同步版 (解決 IG 驗證衝突)")
 
     if not os.path.exists(TEMP_DIR): os.makedirs(TEMP_DIR, exist_ok=True)
 
@@ -140,11 +141,11 @@ def main():
         if not url:
             st.warning("請先輸入網址")
         else:
-            # 🔥 V5.0 修正邏輯：移到這裡並增加通知 🔥
+            # V5.0 修正邏輯保留
             if "threads.com" in url:
                 url = url.replace("threads.com", "threads.net")
-                st.toast("⚠️ 偵測到錯誤網址 (threads.com)，已自動修正為 threads.net！", icon="🔧")
-                time.sleep(1) # 讓使用者看到通知
+                st.toast("⚠️ 偵測到錯誤網址，已修正為 threads.net", icon="🔧")
+                time.sleep(1)
 
             with st.status("🚀 處理中...", expanded=True) as status:
                 file_path, result_msg, used_cookie = download_video(url)
@@ -162,7 +163,7 @@ def main():
                     status.update(label="下載失敗", state="error")
                     st.error(f"❌ 錯誤: {result_msg}")
                     if "login required" in str(result_msg).lower():
-                        st.warning("💡 請檢查側邊欄 Cookies 是否已上傳。")
+                        st.warning("💡 請重新上傳一次 Cookies，並確保輸出後沒有登出 IG。")
 
     if st.session_state['downloaded_file'] and os.path.exists(st.session_state['downloaded_file']):
         with open(st.session_state['downloaded_file'], "rb") as file:
