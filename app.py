@@ -7,7 +7,7 @@ import time
 import subprocess
 import sys
 
-# --- V17.0 強制依賴更新 ---
+# --- V18.0 強制依賴更新 ---
 if 'dep_installed' not in st.session_state:
     try:
         subprocess.check_call([sys.executable, "-m", "pip", "install", "--upgrade", "yt-dlp"])
@@ -15,7 +15,7 @@ if 'dep_installed' not in st.session_state:
     st.session_state['dep_installed'] = True
 
 # --- 頁面設定 ---
-st.set_page_config(page_title="全能下載器 V17.0", page_icon="🦄", layout="centered")
+st.set_page_config(page_title="全能下載器 V18.0", page_icon="🦄", layout="centered")
 
 # --- 常數 ---
 CONFIG_FILE = "api_key_config.json"
@@ -49,7 +49,7 @@ def save_api_key(key):
 
 if 'user_api_key' not in st.session_state: st.session_state['user_api_key'] = load_api_key()
 
-# --- 🔥 V17.0 核心黑科技：Cookie 權限魔改 🔥 ---
+# --- 🔥 V18.0 核心技術：Cookie 權限魔改 🔥 ---
 def patch_cookies_for_threads(cookie_path):
     """將 IG 的 Cookie 權限複製一份給 Threads"""
     try:
@@ -85,7 +85,7 @@ def download_video(raw_url, use_cookies=True):
     if "threads.com" in final_url: final_url = final_url.replace("threads.com", "threads.net")
     if "threads.net" in final_url and "?" in final_url: final_url = final_url.split("?")[0]
 
-    # Windows 偽裝 (配合你的電腦版 Cookie)
+    # V18.0: 偽裝成 Windows (配合你的電腦 Cookie) + 加上 Referer 騙過轉址
     user_agent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36'
 
     ydl_opts = {
@@ -93,15 +93,18 @@ def download_video(raw_url, use_cookies=True):
         'outtmpl': output_path,
         'quiet': True,
         'no_warnings': True,
-        'http_headers': {'User-Agent': user_agent}
+        'http_headers': {
+            'User-Agent': user_agent,
+            'Referer': 'https://www.instagram.com/',  # 🔥 關鍵：騙伺服器我們是從 IG 點過去的
+            'Origin': 'https://www.instagram.com',
+        }
     }
 
     cookie_to_use = None
     if use_cookies:
         if "instagram.com" in final_url.lower() or "threads.net" in final_url.lower():
             if os.path.exists(IG_COOKIE_FILE):
-                # 下載前先魔改 Cookie
-                patch_cookies_for_threads(IG_COOKIE_FILE)
+                patch_cookies_for_threads(IG_COOKIE_FILE) # 確保權限有寫入
                 cookie_to_use = IG_COOKIE_FILE
         elif "facebook.com" in final_url.lower() or "fb.watch" in final_url.lower():
             if os.path.exists(FB_COOKIE_FILE): cookie_to_use = FB_COOKIE_FILE
@@ -117,8 +120,8 @@ def download_video(raw_url, use_cookies=True):
 
 # --- 主介面 ---
 def main():
-    st.title("🦄 全能下載器 V17.0")
-    st.markdown("### 🔴 請確認看到此標題才是最新版！")
+    st.title("🦄 全能下載器 V18.0")
+    st.markdown("### 防轉址強化版")
 
     if not os.path.exists(TEMP_DIR): os.makedirs(TEMP_DIR, exist_ok=True)
 
@@ -133,10 +136,8 @@ def main():
         ig_file = st.file_uploader("IG Cookies (Threads 通用)", type=["txt"], key="ig_uploader")
         if ig_file is not None:
             with open(IG_COOKIE_FILE, "wb") as f: f.write(ig_file.getbuffer())
-            if patch_cookies_for_threads(IG_COOKIE_FILE):
-                st.success("✅ IG Cookies 更新並已擴充 Threads 權限！")
-            else:
-                st.success("✅ IG Cookies 更新成功")
+            patch_cookies_for_threads(IG_COOKIE_FILE)
+            st.success("✅ IG/Threads 憑證已處理")
 
         fb_file = st.file_uploader("FB Cookies", type=["txt"], key="fb_uploader")
         if fb_file is not None:
@@ -154,7 +155,7 @@ def main():
         if not input_url:
             st.warning("請輸入網址")
         else:
-            st.info(f"🦄 V17 正在處理：\n{input_url}") # 這是 V17 的特徵
+            st.info(f"🦄 V18 正在處理：\n{input_url}")
             
             with st.status("🚀 下載中...", expanded=True) as status:
                 path, title, cookie, err_msg = download_video(input_url, use_cookies=use_cookies_toggle)
