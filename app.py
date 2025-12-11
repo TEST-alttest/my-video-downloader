@@ -7,7 +7,7 @@ import time
 
 # --- 頁面設定 ---
 st.set_page_config(
-    page_title="全能影片下載器 V6.0",
+    page_title="全能影片下載器 V7.0",
     page_icon="⬇️",
     layout="centered"
 )
@@ -58,14 +58,19 @@ def save_api_key_to_file(key):
 if 'user_api_key' not in st.session_state:
     st.session_state['user_api_key'] = load_api_key()
 
-# --- 下載核心函式 ---
+# --- 下載核心函式 (強制修正邏輯移入此處) ---
 def download_video(url):
     safe_clean_temp_dir()
     
+    # 🔥 V7.0 雙重保險：不管外面有沒有改，這裡強制再改一次 🔥
+    if "threads.com" in url:
+        url = url.replace("threads.com", "threads.net")
+        print(f"Inside downloader: Auto-corrected to {url}")
+
     timestamp = int(time.time())
     output_path = f"{TEMP_DIR}/video_{timestamp}.%(ext)s"
     
-    # 使用電腦版 User-Agent 以匹配 Cookies
+    # 使用電腦版 User-Agent 以匹配電腦版 Cookies
     user_agent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
 
     ydl_opts = {
@@ -92,6 +97,8 @@ def download_video(url):
 
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            # 這裡顯示實際下載的 URL，方便除錯
+            st.toast(f"正在嘗試下載：{url}", icon="🕵️")
             info = ydl.extract_info(url, download=True)
             filename = ydl.prepare_filename(info)
             return filename, info.get('title', 'video'), cookie_to_use
@@ -100,8 +107,8 @@ def download_video(url):
 
 # --- 主程式介面 ---
 def main():
-    st.title("⬇️ 全能影片下載器 V6.0")
-    st.caption("強制修正版 (Debug)")
+    st.title("⬇️ 全能影片下載器 V7.0")
+    st.caption("雙重防呆 + 環境診斷版")
 
     if not os.path.exists(TEMP_DIR): os.makedirs(TEMP_DIR, exist_ok=True)
 
@@ -130,28 +137,33 @@ def main():
             st.success("✅ FB Cookies 已更新")
             
         st.divider()
-        st.caption("狀態：")
+        st.caption("環境狀態：")
         st.markdown(f"🟢 IG 驗證檔：{'**已就緒**' if os.path.exists(IG_COOKIE_FILE) else '未上傳'}")
         st.markdown(f"🟢 FB 驗證檔：{'**已就緒**' if os.path.exists(FB_COOKIE_FILE) else '未上傳'}")
+        
+        # 顯示 yt-dlp 版本，確認 requirements.txt 是否生效
+        try:
+            version = yt_dlp.version.__version__
+            st.caption(f"Engine Ver: {version}")
+        except:
+            st.caption("Engine Ver: Unknown")
 
     st.divider()
     
-    # 1. 取得原始輸入
-    raw_url = st.text_input("貼上影片連結", placeholder="請貼上網址...")
+    # 這裡只負責接收輸入，不負責修正，修正交給下載核心
+    input_url = st.text_input("貼上影片連結", placeholder="請貼上網址...")
     
-    # 2. 🔥 強制即時修正 (不須按按鈕) 🔥
-    clean_url = raw_url.strip() # 去除前後空白
-    if "threads.com" in clean_url:
-        clean_url = clean_url.replace("threads.com", "threads.net")
-        st.info(f"🔧 已自動將 threads.com 修正為：\n{clean_url}")
+    # 介面顯示修正提示
+    if input_url and "threads.com" in input_url:
+        st.info(f"🔧 偵測到 threads.com，系統將在下載時自動修正為 .net")
 
     if st.button("🔍 解析並下載", type="primary", use_container_width=True):
-        if not clean_url:
+        if not input_url:
             st.warning("請先輸入網址")
         else:
-            # 3. 把乾淨的 clean_url 傳進去，而不是 raw_url
-            with st.status(f"🚀 正在下載：{clean_url} ...", expanded=True) as status:
-                file_path, result_msg, used_cookie = download_video(clean_url)
+            with st.status(f"🚀 啟動下載引擎...", expanded=True) as status:
+                # 直接傳入原始網址，讓 download_video 內部去改
+                file_path, result_msg, used_cookie = download_video(input_url)
                 
                 if file_path and os.path.exists(file_path):
                     status.write("✅ 下載成功！")
@@ -166,12 +178,11 @@ def main():
                     status.update(label="下載失敗", state="error")
                     st.error(f"❌ 錯誤訊息: {result_msg}")
                     
-                    # 錯誤診斷
                     err_str = str(result_msg).lower()
                     if "unsupported url" in err_str:
-                        st.error("💡 嚴重錯誤：下載引擎看不懂這個網址，請確認 requirements.txt 已更新。")
+                         st.error("💡 嚴重錯誤：網址無法識別。請確認 requirements.txt 內的 yt-dlp 已更新到最新版。")
                     elif "login required" in err_str:
-                        st.warning("💡 請重新上傳 Cookies (需使用電腦版 Chrome 下載，且下載後不可登出)。")
+                        st.warning("💡 需要登入：網址正確，但被 IG 擋住了。請重新上傳 Cookies (需用電腦版 Chrome 下載，且不可登出)。")
 
     if st.session_state['downloaded_file'] and os.path.exists(st.session_state['downloaded_file']):
         with open(st.session_state['downloaded_file'], "rb") as file:
