@@ -7,7 +7,7 @@ import time
 
 # --- 頁面設定 ---
 st.set_page_config(
-    page_title="全能影片下載器 V5",
+    page_title="全能影片下載器 V4.4",
     page_icon="⬇️",
     layout="centered"
 )
@@ -35,27 +35,24 @@ def safe_clean_temp_dir():
             try: os.remove(file_path)
             except: pass
 
-# --- API Key 管理 (升級版) ---
+# --- API Key 管理 ---
 def load_api_key():
-    # 1. 最優先：檢查 Streamlit 雲端保險箱 (Secrets)
+    # 優先讀取 Secrets
     if "GEMINI_API_KEY" in st.secrets:
         return st.secrets["GEMINI_API_KEY"]
-    
-    # 2. 其次：檢查臨時存檔 (使用者手動輸入的)
     if os.path.exists(CONFIG_FILE):
         try:
             with open(CONFIG_FILE, "r") as f:
                 data = json.load(f)
                 return data.get("api_key", "")
-        except:
-            return ""
+        except: return ""
     return ""
 
 def save_api_key_to_file(key):
     try:
         with open(CONFIG_FILE, "w") as f:
             json.dump({"api_key": key}, f)
-        st.toast("✅ Key 已暫存 (重啟後會消失，建議設定 Secrets)", icon="💾")
+        st.toast("✅ Key 已暫存", icon="💾")
     except Exception as e:
         st.error(f"儲存失敗: {e}")
 
@@ -65,6 +62,13 @@ if 'user_api_key' not in st.session_state:
 # --- 下載核心函式 ---
 def download_video(url):
     safe_clean_temp_dir()
+    
+    # 🔥 V4.4 新增：網址自動修正機制 🔥
+    # 如果使用者貼了 threads.com，自動改成 threads.net
+    if "threads.com" in url:
+        url = url.replace("threads.com", "threads.net")
+        print("Auto-corrected URL to threads.net")
+        
     timestamp = int(time.time())
     output_path = f"{TEMP_DIR}/video_{timestamp}.%(ext)s"
     
@@ -102,25 +106,19 @@ def download_video(url):
 
 # --- 主程式介面 ---
 def main():
-    st.title("⬇️ 全能影片下載器 V5")
-    st.caption("支援 Secrets 永久免輸入 Key")
+    st.title("⬇️ 全能影片下載器 V4.4")
+    st.caption("支援 Secrets + 網址自動修正")
 
     if not os.path.exists(TEMP_DIR): os.makedirs(TEMP_DIR, exist_ok=True)
 
     with st.sidebar:
         st.header("⚙️ 設定")
-        
-        # 顯示 Key 狀態
-        is_using_secrets = "GEMINI_API_KEY" in st.secrets
-        
-        if is_using_secrets:
+        if "GEMINI_API_KEY" in st.secrets:
             st.success("🔒 已使用雲端 Secrets Key")
-            # 如果用了 Secrets，就不顯示輸入框，避免混淆
             st.session_state['user_api_key'] = st.secrets["GEMINI_API_KEY"]
         else:
             api_key_input = st.text_input("Gemini API Key", type="password", value=st.session_state['user_api_key'])
             if st.button("💾 暫存 Key"): save_api_key_to_file(api_key_input)
-            st.caption("建議在 Streamlit 後台設定 Secrets 以永久儲存。")
         
         st.divider()
         st.header("🍪 雙平台解鎖")
@@ -136,14 +134,14 @@ def main():
         if fb_file:
             with open(FB_COOKIE_FILE, "wb") as f: f.write(fb_file.getbuffer())
             st.success("✅ FB Cookies 已更新")
-
+            
         st.divider()
         st.caption("狀態：")
         st.markdown(f"🟢 IG 驗證檔：{'**已就緒**' if os.path.exists(IG_COOKIE_FILE) else '未上傳'}")
         st.markdown(f"🟢 FB 驗證檔：{'**已就緒**' if os.path.exists(FB_COOKIE_FILE) else '未上傳'}")
 
     st.divider()
-    url = st.text_input("貼上影片連結", placeholder="FB, IG, Threads, YouTube...")
+    url = st.text_input("貼上影片連結", placeholder="即使貼成 threads.com 也會自動修正...")
 
     if st.button("🔍 解析並下載", type="primary", use_container_width=True):
         if not url:
@@ -180,5 +178,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
