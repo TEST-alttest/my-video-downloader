@@ -6,7 +6,7 @@ import json
 import time
 
 # --- 頁面設定 ---
-st.set_page_config(page_title="全能下載器 V8.0", page_icon="⬇️", layout="centered")
+st.set_page_config(page_title="全能下載器 V8.1", page_icon="⬇️", layout="centered")
 
 # --- 常數 ---
 CONFIG_FILE = "api_key_config.json"
@@ -46,7 +46,7 @@ def download_video(url):
     timestamp = int(time.time())
     output_path = f"{TEMP_DIR}/video_{timestamp}.%(ext)s"
     
-    # 偽裝成 Windows 電腦，配合 Cookies
+    # 偽裝成 Windows 電腦
     user_agent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
 
     ydl_opts = {
@@ -57,7 +57,6 @@ def download_video(url):
         'http_headers': {'User-Agent': user_agent, 'Accept-Language': 'en-US,en;q=0.9'}
     }
 
-    # Cookies 判斷
     cookie_to_use = None
     if "facebook.com" in url.lower() or "fb.watch" in url.lower():
         if os.path.exists(FB_COOKIE_FILE): cookie_to_use = FB_COOKIE_FILE
@@ -75,8 +74,8 @@ def download_video(url):
 
 # --- 主介面 ---
 def main():
-    st.title("⬇️ 全能下載器 V8.0")
-    st.caption("真實網址檢查 + 強制修正")
+    st.title("⬇️ 全能下載器 V8.1")
+    st.caption("修復 Cookies 上傳崩潰問題")
 
     if not os.path.exists(TEMP_DIR): os.makedirs(TEMP_DIR, exist_ok=True)
 
@@ -89,12 +88,19 @@ def main():
         
         st.divider()
         st.info("若下載失敗請更新 Cookies")
-        if st.file_uploader("IG Cookies", type=["txt"]):
-            with open(IG_COOKIE_FILE, "wb") as f: f.write(st.file_uploader("IG Cookies", type=["txt"], key="ig").getbuffer())
-            st.success("IG 更新")
-        if st.file_uploader("FB Cookies", type=["txt"]):
-            with open(FB_COOKIE_FILE, "wb") as f: f.write(st.file_uploader("FB Cookies", type=["txt"], key="fb").getbuffer())
-            st.success("FB 更新")
+        
+        # 🔥 V8.1 修正：正確處理檔案上傳物件 🔥
+        ig_file = st.file_uploader("IG Cookies", type=["txt"], key="ig_uploader")
+        if ig_file is not None:
+            with open(IG_COOKIE_FILE, "wb") as f: 
+                f.write(ig_file.getbuffer())
+            st.success("IG Cookies 已更新")
+
+        fb_file = st.file_uploader("FB Cookies", type=["txt"], key="fb_uploader")
+        if fb_file is not None:
+            with open(FB_COOKIE_FILE, "wb") as f: 
+                f.write(fb_file.getbuffer())
+            st.success("FB Cookies 已更新")
         
         st.caption(f"IG 檔: {'✅' if os.path.exists(IG_COOKIE_FILE) else '❌'} | FB 檔: {'✅' if os.path.exists(FB_COOKIE_FILE) else '❌'}")
         try: st.caption(f"Engine: {yt_dlp.version.__version__}")
@@ -102,16 +108,14 @@ def main():
 
     st.divider()
     
-    # --- V8.0 核心修正邏輯 ---
+    # --- 核心下載邏輯 ---
     raw_url = st.text_input("貼上影片連結")
     
-    # 1. 現場修正
     real_url = raw_url.strip()
     if "threads.com" in real_url:
         real_url = real_url.replace("threads.com", "threads.net")
         st.info(f"🔧 已強制修正網址為：{real_url}")
     
-    # 2. 顯示給使用者看，證明網址是對的
     if real_url:
         st.code(f"準備下載：{real_url}", language="text")
 
@@ -120,7 +124,6 @@ def main():
             st.warning("請輸入網址")
         else:
             with st.status("🚀 下載中...", expanded=True) as status:
-                # 3. 絕對只傳修正後的 real_url
                 path, msg, cookie = download_video(real_url)
                 
                 if path and os.path.exists(path):
@@ -133,7 +136,7 @@ def main():
                     status.update(label="失敗", state="error")
                     st.error(f"❌ 錯誤: {msg}")
                     if "unsupported url" in str(msg).lower():
-                        st.error("💀 嚴重錯誤：請務必更新 requirements.txt (見下方說明)")
+                        st.error("💀 嚴重錯誤：請更新 requirements.txt")
 
     if st.session_state['downloaded_file'] and os.path.exists(st.session_state['downloaded_file']):
         with open(st.session_state['downloaded_file'], "rb") as f:
