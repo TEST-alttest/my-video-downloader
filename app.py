@@ -1,43 +1,18 @@
 import streamlit as st
-import subprocess
-import sys
+import yt_dlp
 import os
 import time
-import importlib
+import shutil
 
 # --- 頁面設定 ---
-st.set_page_config(page_title="全能下載器 V22.0", page_icon="🦄", layout="centered")
-
-# --- 🔥 V22.0 核心修正：在匯入前強制升級 yt-dlp 🔥 ---
-# 這是為了解決 Streamlit 緩存導致引擎過舊，看不懂 .net 網址的問題
-if "libs_fixed" not in st.session_state:
-    try:
-        # 顯示提示
-        placeholder = st.empty()
-        placeholder.warning("正在強制升級下載引擎，請稍候約 10 秒...")
-        
-        # 強制執行 pip install 升級
-        subprocess.check_call([sys.executable, "-m", "pip", "install", "--upgrade", "--force-reinstall", "yt-dlp"])
-        
-        st.session_state["libs_fixed"] = True
-        placeholder.success("✅ 引擎升級完成！")
-        time.sleep(1)
-        placeholder.empty()
-    except Exception as e:
-        st.error(f"引擎更新失敗: {e}")
-
-# 升級後再匯入，並強制重新載入模組
-import yt_dlp
-importlib.reload(yt_dlp) 
+st.set_page_config(page_title="全能下載器 V23.0", page_icon="🦄", layout="centered")
 
 # --- 常數設定 ---
 TEMP_DIR = "mobile_downloads"
 IG_COOKIE_FILE = os.path.join(TEMP_DIR, "ig_cookies.txt")
 FB_COOKIE_FILE = os.path.join(TEMP_DIR, "fb_cookies.txt")
 
-# 確保目錄存在
-if not os.path.exists(TEMP_DIR):
-    os.makedirs(TEMP_DIR, exist_ok=True)
+if not os.path.exists(TEMP_DIR): os.makedirs(TEMP_DIR, exist_ok=True)
 
 # --- 工具函式 ---
 def safe_clean_temp_dir():
@@ -53,19 +28,12 @@ def download_video(url, use_cookies=True):
     
     # 1. 強制修正網址
     final_url = url.strip()
-    if "threads.com" in final_url:
-        final_url = final_url.replace("threads.com", "threads.net")
-    if "threads.net" in final_url and "?" in final_url:
-        final_url = final_url.split("?")[0]
+    if "threads.com" in final_url: final_url = final_url.replace("threads.com", "threads.net")
+    if "threads.net" in final_url and "?" in final_url: final_url = final_url.split("?")[0]
 
-    # 2. 顯示引擎版本與網址 (除錯用)
-    try:
-        ver = yt_dlp.version.__version__
-    except:
-        ver = "未知"
-    st.info(f"⚙️ 引擎版本: {ver} | 鎖定網址: {final_url}")
+    st.info(f"⚙️ 系統鎖定網址：{final_url}")
 
-    # 3. 偽裝設定 (iOS API 模式)
+    # 2. 關鍵：使用 iOS API 模式 (避開網頁轉址)
     ydl_opts = {
         'format': 'bestvideo+bestaudio/best',
         'outtmpl': output_path,
@@ -78,14 +46,11 @@ def download_video(url, use_cookies=True):
         }
     }
     
-    # 4. 掛載 Cookies
     if use_cookies:
         if "instagram.com" in final_url or "threads.net" in final_url:
-            if os.path.exists(IG_COOKIE_FILE):
-                ydl_opts['cookiefile'] = IG_COOKIE_FILE
+            if os.path.exists(IG_COOKIE_FILE): ydl_opts['cookiefile'] = IG_COOKIE_FILE
         elif "facebook.com" in final_url or "fb.watch" in final_url:
-            if os.path.exists(FB_COOKIE_FILE):
-                ydl_opts['cookiefile'] = FB_COOKIE_FILE
+            if os.path.exists(FB_COOKIE_FILE): ydl_opts['cookiefile'] = FB_COOKIE_FILE
 
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -95,8 +60,18 @@ def download_video(url, use_cookies=True):
         return None, None, str(e)
 
 # --- 主介面 ---
-st.title("🦄 全能下載器 V22.0")
-st.caption("引擎強制熱更新版")
+st.title("🦄 全能下載器 V23.0")
+st.caption("iOS API 模式 + 穩定版")
+
+# 檢查引擎版本 (僅顯示，不強制更新以免崩潰)
+try: 
+    ver = yt_dlp.version.__version__
+    if ver.startswith("2024") or ver.startswith("2025"):
+        st.success(f"✅ 引擎版本正常: {ver}")
+    else:
+        st.error(f"❌ 引擎版本過舊 ({ver})，請修改 requirements.txt")
+except: 
+    pass
 
 # 側邊欄
 with st.sidebar:
