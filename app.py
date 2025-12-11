@@ -4,10 +4,11 @@ import os
 import shutil
 import json
 import time
+import urllib.parse
 
 # --- 頁面設定 ---
 st.set_page_config(
-    page_title="全能影片下載器 V4",
+    page_title="全能影片下載器 V4.1",
     page_icon="⬇️",
     layout="centered"
 )
@@ -23,6 +24,8 @@ if 'downloaded_file' not in st.session_state:
     st.session_state['downloaded_file'] = None
 if 'file_name' not in st.session_state:
     st.session_state['file_name'] = None
+if 'current_url' not in st.session_state:
+    st.session_state['current_url'] = ""
 
 # --- 工具函式 ---
 def safe_clean_temp_dir():
@@ -91,18 +94,15 @@ def download_video(url):
     }
 
     # --- 智慧 Cookies 判斷 ---
-    # 判斷網址是 FB 還是 IG/Threads，自動掛載對應檔案
     cookie_to_use = None
     url_lower = url.lower()
 
     if "facebook.com" in url_lower or "fb.watch" in url_lower:
         if os.path.exists(FB_COOKIE_FILE):
             cookie_to_use = FB_COOKIE_FILE
-            print("Using FB Cookies")
     elif "instagram.com" in url_lower or "threads.net" in url_lower:
         if os.path.exists(IG_COOKIE_FILE):
             cookie_to_use = IG_COOKIE_FILE
-            print("Using IG Cookies")
     
     if cookie_to_use:
         ydl_opts['cookiefile'] = cookie_to_use
@@ -117,10 +117,9 @@ def download_video(url):
 
 # --- 主程式介面 ---
 def main():
-    st.title("⬇️ 全能影片下載器 V4")
-    st.caption("自動切換 FB / IG 驗證，雙刀流版本")
+    st.title("⬇️ 全能影片下載器 V4.1")
+    st.caption("FB / IG / YT / Threads (含 LINE 分享)")
 
-    # 確保目錄存在
     if not os.path.exists(TEMP_DIR):
         os.makedirs(TEMP_DIR, exist_ok=True)
 
@@ -133,9 +132,8 @@ def main():
         st.divider()
 
         st.header("🍪 雙平台解鎖")
-        st.info("請分別上傳 Cookies，系統會自動選用。")
+        st.info("若下載失敗 (Login required)，請上傳 Cookies。")
         
-        # IG Cookies 上傳區
         st.caption("📱 **Instagram / Threads**")
         ig_file = st.file_uploader("上傳 IG cookies.txt", type=["txt"], key="ig_uploader")
         if ig_file:
@@ -143,7 +141,6 @@ def main():
                 f.write(ig_file.getbuffer())
             st.success("✅ IG Cookies 已更新")
             
-        # FB Cookies 上傳區
         st.caption("📘 **Facebook**")
         fb_file = st.file_uploader("上傳 FB cookies.txt", type=["txt"], key="fb_uploader")
         if fb_file:
@@ -151,7 +148,6 @@ def main():
                 f.write(fb_file.getbuffer())
             st.success("✅ FB Cookies 已更新")
 
-        # 顯示目前狀態
         st.divider()
         st.caption("目前狀態：")
         if os.path.exists(IG_COOKIE_FILE): st.markdown("🟢 IG 驗證檔：**已就緒**")
@@ -168,8 +164,10 @@ def main():
         if not url:
             st.warning("請先輸入網址")
         else:
-            with st.status("🚀 智慧識別中...", expanded=True) as status:
-                
+            # 儲存網址以便分享
+            st.session_state['current_url'] = url
+            
+            with st.status("🚀 處理中...", expanded=True) as status:
                 file_path, result_msg, used_cookie = download_video(url)
                 
                 if file_path and os.path.exists(file_path):
@@ -182,18 +180,18 @@ def main():
                     safe_title = "".join([c for c in str(result_msg) if c.isalpha() or c.isdigit() or c==' ']).strip()
                     if not safe_title: safe_title = "video_download"
                     st.session_state['file_name'] = f"{safe_title}.mp4"
-                    status.update(label="完成！請點擊下方儲存", state="complete")
+                    status.update(label="完成！", state="complete")
                 else:
                     status.update(label="下載失敗", state="error")
                     st.error(f"❌ 錯誤: {result_msg}")
-                    
-                    # 錯誤提示
                     err_str = str(result_msg).lower()
                     if "login required" in err_str:
                         st.warning("💡 請檢查左側是否已上傳對應平台的 Cookies。")
 
-    # --- 下載按鈕 ---
+    # --- 下載按鈕與分享區 ---
     if st.session_state['downloaded_file'] and os.path.exists(st.session_state['downloaded_file']):
+        
+        # 1. 檔案下載按鈕
         with open(st.session_state['downloaded_file'], "rb") as file:
             st.download_button(
                 label="📥 儲存影片到手機",
@@ -203,6 +201,15 @@ def main():
                 use_container_width=True,
                 type="primary"
             )
+
+        # 2. LINE 分享連結按鈕
+        st.divider()
+        if st.session_state['current_url']:
+            share_text = f"這影片蠻有趣的，傳給你看看：\n{st.session_state['current_url']}"
+            encoded_text = urllib.parse.quote(share_text)
+            line_share_url = f"https://line.me/R/msg/text/?{encoded_text}"
+            
+            st.link_button("💬 分享連結給 LINE 好友", line_share_url, use_container_width=True)
 
 if __name__ == "__main__":
     main()
