@@ -6,7 +6,7 @@ import json
 import time
 
 # --- 頁面設定 ---
-st.set_page_config(page_title="全能下載器 V13.0", page_icon="🦄", layout="centered")
+st.set_page_config(page_title="全能下載器 V14.0", page_icon="🦄", layout="centered")
 
 # --- 常數 ---
 CONFIG_FILE = "api_key_config.json"
@@ -40,13 +40,26 @@ def save_api_key(key):
 
 if 'user_api_key' not in st.session_state: st.session_state['user_api_key'] = load_api_key()
 
-# --- 下載核心 ---
-def download_video(url, use_cookies=True):
+# --- 下載核心 (V14.0: 邏輯內縮) ---
+def download_video(raw_url, use_cookies=True):
     safe_clean_temp_dir()
     timestamp = int(time.time())
     output_path = f"{TEMP_DIR}/video_{timestamp}.%(ext)s"
     
-    # 偽裝 Windows
+    # 🔥 V14.0 強制修正區：不管外面傳什麼，進來這裡一律重改 🔥
+    final_url = raw_url.strip()
+    
+    # 1. 強制改網域
+    if "threads.com" in final_url:
+        final_url = final_url.replace("threads.com", "threads.net")
+    
+    # 2. 強制切參數
+    if "threads.net" in final_url and "?" in final_url:
+        final_url = final_url.split("?")[0]
+
+    # 3. 現場證據：直接印出來給你看
+    st.write(f"⚙️ 核心引擎實際執行的網址: {final_url}")
+    
     user_agent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36'
 
     ydl_opts = {
@@ -59,25 +72,25 @@ def download_video(url, use_cookies=True):
 
     cookie_to_use = None
     if use_cookies:
-        # Threads 只要有 IG 餅乾就能過
-        if "instagram.com" in url.lower() or "threads.net" in url.lower():
+        if "instagram.com" in final_url.lower() or "threads.net" in final_url.lower():
             if os.path.exists(IG_COOKIE_FILE): cookie_to_use = IG_COOKIE_FILE
-        elif "facebook.com" in url.lower() or "fb.watch" in url.lower():
+        elif "facebook.com" in final_url.lower() or "fb.watch" in final_url.lower():
             if os.path.exists(FB_COOKIE_FILE): cookie_to_use = FB_COOKIE_FILE
         
         if cookie_to_use: ydl_opts['cookiefile'] = cookie_to_use
 
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(url, download=True)
+            # 這裡使用的是已經改好的 final_url
+            info = ydl.extract_info(final_url, download=True)
             return ydl.prepare_filename(info), info.get('title', 'video'), cookie_to_use, None
     except Exception as e:
         return None, "下載失敗", cookie_to_use, str(e)
 
 # --- 主介面 ---
 def main():
-    st.title("🦄 全能下載器 V13.0")
-    st.markdown("### 🔴 如果你沒看到這行紅字，代表沒更新成功！")
+    st.title("🦄 全能下載器 V14.0")
+    st.caption("邏輯內縮版 (解決殭屍代碼)")
 
     if not os.path.exists(TEMP_DIR): os.makedirs(TEMP_DIR, exist_ok=True)
 
@@ -89,7 +102,6 @@ def main():
             if st.button("💾"): save_api_key(k)
         
         st.divider()
-        # V13.0 上傳區
         ig_file = st.file_uploader("IG Cookies (Threads 通用)", type=["txt"], key="ig_uploader")
         if ig_file is not None:
             with open(IG_COOKIE_FILE, "wb") as f: f.write(ig_file.getbuffer())
@@ -101,36 +113,19 @@ def main():
             st.success("✅ FB Cookies 更新成功")
             
         if os.path.exists(IG_COOKIE_FILE): st.caption("✅ IG 憑證: OK")
-        else: st.caption("❌ IG 憑證: 空")
-
-        try: st.caption(f"Engine Ver: {yt_dlp.version.__version__}")
-        except: pass
 
     st.divider()
     
-    raw_url = st.text_input("貼上影片連結")
-    real_url = raw_url.strip()
-    
-    # 強制修正邏輯
-    if "threads.com" in real_url:
-        real_url = real_url.replace("threads.com", "threads.net")
-        st.toast("🔧 網址已從 .com 修正為 .net")
-    
-    # 切除參數
-    if "threads.net" in real_url and "?" in real_url:
-        real_url = real_url.split("?")[0]
-    
+    input_url = st.text_input("貼上影片連結")
     use_cookies_toggle = st.checkbox("🍪 掛載 Cookies", value=True)
 
     if st.button("🔍 解析並下載", type="primary", use_container_width=True):
-        if not real_url:
+        if not input_url:
             st.warning("請輸入網址")
         else:
-            # 這是 V13.0 的特徵
-            st.info(f"🚀 V13 引擎正在處理：\n{real_url}")
-            
-            with st.status("處理中...", expanded=True) as status:
-                path, title, cookie, err_msg = download_video(real_url, use_cookies=use_cookies_toggle)
+            with st.status("🚀 處理中...", expanded=True) as status:
+                # 直接把原始網址傳進去，不依賴外部邏輯
+                path, title, cookie, err_msg = download_video(input_url, use_cookies=use_cookies_toggle)
                 
                 if path and os.path.exists(path):
                     status.write("✅ 成功！")
