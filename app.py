@@ -7,7 +7,7 @@ import time
 
 # --- 頁面設定 ---
 st.set_page_config(
-    page_title="全能影片下載器 V5",
+    page_title="全能影片下載器 V5.0",
     page_icon="⬇️",
     layout="centered"
 )
@@ -37,7 +37,6 @@ def safe_clean_temp_dir():
 
 # --- API Key 管理 ---
 def load_api_key():
-    # 優先讀取 Secrets
     if "GEMINI_API_KEY" in st.secrets:
         return st.secrets["GEMINI_API_KEY"]
     if os.path.exists(CONFIG_FILE):
@@ -63,12 +62,6 @@ if 'user_api_key' not in st.session_state:
 def download_video(url):
     safe_clean_temp_dir()
     
-    # 🔥 V4.4 新增：網址自動修正機制 🔥
-    # 如果使用者貼了 threads.com，自動改成 threads.net
-    if "threads.com" in url:
-        url = url.replace("threads.com", "threads.net")
-        print("Auto-corrected URL to threads.net")
-        
     timestamp = int(time.time())
     output_path = f"{TEMP_DIR}/video_{timestamp}.%(ext)s"
     
@@ -106,8 +99,8 @@ def download_video(url):
 
 # --- 主程式介面 ---
 def main():
-    st.title("⬇️ 全能影片下載器 V5")
-    st.caption("支援 Secrets + 網址自動修正")
+    st.title("⬇️ 全能影片下載器 V5.0")
+    st.caption("自動修正 Threads 網址錯誤")
 
     if not os.path.exists(TEMP_DIR): os.makedirs(TEMP_DIR, exist_ok=True)
 
@@ -147,6 +140,12 @@ def main():
         if not url:
             st.warning("請先輸入網址")
         else:
+            # 🔥 V5.0 修正邏輯：移到這裡並增加通知 🔥
+            if "threads.com" in url:
+                url = url.replace("threads.com", "threads.net")
+                st.toast("⚠️ 偵測到錯誤網址 (threads.com)，已自動修正為 threads.net！", icon="🔧")
+                time.sleep(1) # 讓使用者看到通知
+
             with st.status("🚀 處理中...", expanded=True) as status:
                 file_path, result_msg, used_cookie = download_video(url)
                 
@@ -178,4 +177,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
