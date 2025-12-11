@@ -1,12 +1,28 @@
 import streamlit as st
-import yt_dlp
 import os
 import shutil
 import json
 import time
+import subprocess
+import sys
+
+# --- V15.0 核彈級功能：強制自我檢查與更新 ---
+def force_upgrade_ytdlp():
+    try:
+        # 檢查 yt-dlp 版本，如果太舊或讀不到就強制重裝
+        subprocess.check_call([sys.executable, "-m", "pip", "install", "--upgrade", "yt-dlp"])
+    except:
+        pass
+
+# 在程式一啟動時就先執行更新檢查
+if 'ytdlp_checked' not in st.session_state:
+    force_upgrade_ytdlp()
+    st.session_state['ytdlp_checked'] = True
+
+import yt_dlp # 更新後再匯入
 
 # --- 頁面設定 ---
-st.set_page_config(page_title="全能下載器 V14.0", page_icon="🦄", layout="centered")
+st.set_page_config(page_title="全能下載器 V15.0", page_icon="🦄", layout="centered")
 
 # --- 常數 ---
 CONFIG_FILE = "api_key_config.json"
@@ -40,34 +56,32 @@ def save_api_key(key):
 
 if 'user_api_key' not in st.session_state: st.session_state['user_api_key'] = load_api_key()
 
-# --- 下載核心 (V14.0: 邏輯內縮) ---
+# --- 下載核心 (V15.0: iPhone 偽裝 + API 模式) ---
 def download_video(raw_url, use_cookies=True):
     safe_clean_temp_dir()
     timestamp = int(time.time())
     output_path = f"{TEMP_DIR}/video_{timestamp}.%(ext)s"
     
-    # 🔥 V14.0 強制修正區：不管外面傳什麼，進來這裡一律重改 🔥
     final_url = raw_url.strip()
-    
-    # 1. 強制改網域
+    # 強制修正網域，確保起始點正確
     if "threads.com" in final_url:
         final_url = final_url.replace("threads.com", "threads.net")
-    
-    # 2. 強制切參數
     if "threads.net" in final_url and "?" in final_url:
         final_url = final_url.split("?")[0]
 
-    # 3. 現場證據：直接印出來給你看
-    st.write(f"⚙️ 核心引擎實際執行的網址: {final_url}")
+    st.write(f"⚙️ 核心引擎鎖定網址: {final_url}")
     
-    user_agent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36'
-
+    # 🔥 關鍵修改：偽裝成 iPhone App (Instagram iOS) 🔥
+    # 這能避免被伺服器轉址回 .com
     ydl_opts = {
         'format': 'bestvideo+bestaudio/best',
         'outtmpl': output_path,
         'quiet': True,
         'no_warnings': True,
-        'http_headers': {'User-Agent': user_agent}
+        'http_headers': {
+            'User-Agent': 'Instagram 219.0.0.12.117 (iPhone13,4; iOS 14_4; en_US; en-US; scale=3.00; 1284x2778; 352306745)',
+            'Accept-Language': 'en-US',
+        }
     }
 
     cookie_to_use = None
@@ -81,7 +95,6 @@ def download_video(raw_url, use_cookies=True):
 
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            # 這裡使用的是已經改好的 final_url
             info = ydl.extract_info(final_url, download=True)
             return ydl.prepare_filename(info), info.get('title', 'video'), cookie_to_use, None
     except Exception as e:
@@ -89,8 +102,8 @@ def download_video(raw_url, use_cookies=True):
 
 # --- 主介面 ---
 def main():
-    st.title("🦄 全能下載器 V14.0")
-    st.caption("邏輯內縮版 (解決殭屍代碼)")
+    st.title("🦄 全能下載器 V15.0")
+    st.caption("iPhone 偽裝版 (防止轉址)")
 
     if not os.path.exists(TEMP_DIR): os.makedirs(TEMP_DIR, exist_ok=True)
 
@@ -113,18 +126,21 @@ def main():
             st.success("✅ FB Cookies 更新成功")
             
         if os.path.exists(IG_COOKIE_FILE): st.caption("✅ IG 憑證: OK")
+        
+        # 顯示當前引擎版本 (確認是否更新成功)
+        try: st.caption(f"Engine Ver: {yt_dlp.version.__version__}")
+        except: pass
 
     st.divider()
     
     input_url = st.text_input("貼上影片連結")
-    use_cookies_toggle = st.checkbox("🍪 掛載 Cookies", value=True)
+    use_cookies_toggle = st.checkbox("🍪 掛載 Cookies (建議勾選)", value=True)
 
     if st.button("🔍 解析並下載", type="primary", use_container_width=True):
         if not input_url:
             st.warning("請輸入網址")
         else:
-            with st.status("🚀 處理中...", expanded=True) as status:
-                # 直接把原始網址傳進去，不依賴外部邏輯
+            with st.status("🚀 偽裝 iPhone 連線中...", expanded=True) as status:
                 path, title, cookie, err_msg = download_video(input_url, use_cookies=use_cookies_toggle)
                 
                 if path and os.path.exists(path):
