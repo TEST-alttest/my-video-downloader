@@ -102,7 +102,7 @@ def download_video(url):
 
 # --- 主程式介面 ---
 def main():
-    st.title("⬇️ 全能影片下載器 V4.3")
+    st.title("⬇️ 全能影片下載器 V5")
     st.caption("支援 Secrets 永久免輸入 Key")
 
     if not os.path.exists(TEMP_DIR): os.makedirs(TEMP_DIR, exist_ok=True)
@@ -180,4 +180,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
