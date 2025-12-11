@@ -6,24 +6,21 @@ import time
 import subprocess
 import sys
 
-# --- V16.0: 強制依賴檢查 ---
+# --- V17.0: 強制依賴檢查 ---
 def install_dependencies():
-    # 強制安裝最新版 yt-dlp，確保支援 Threads
     try:
         subprocess.check_call([sys.executable, "-m", "pip", "install", "--upgrade", "yt-dlp"])
-        subprocess.check_call([sys.executable, "-m", "pip", "install", "--upgrade", "packaging"])
     except:
         pass
 
-# 啟動時執行一次更新
 if 'dep_installed' not in st.session_state:
     install_dependencies()
     st.session_state['dep_installed'] = True
 
-import yt_dlp # 更新後再匯入
+import yt_dlp
 
 # --- 頁面設定 ---
-st.set_page_config(page_title="全能下載器 V16.0", page_icon="🦄", layout="centered")
+st.set_page_config(page_title="全能下載器 V17.0", page_icon="🦄", layout="centered")
 
 # --- 常數 ---
 CONFIG_FILE = "api_key_config.json"
@@ -57,13 +54,46 @@ def save_api_key(key):
 
 if 'user_api_key' not in st.session_state: st.session_state['user_api_key'] = load_api_key()
 
-# --- 下載核心 (V16.0: 身分同步 + 詳細除錯) ---
+# --- 🔥 V17.0 核心黑科技：餅乾魔改函式 🔥 ---
+def patch_cookies_for_threads(cookie_path):
+    """
+    讀取 IG 餅乾，將 instagram.com 的權限複製一份給 threads.net
+    """
+    try:
+        with open(cookie_path, 'r', encoding='utf-8') as f:
+            lines = f.readlines()
+        
+        new_lines = []
+        has_threads = False
+        
+        for line in lines:
+            new_lines.append(line)
+            # 檢查是否已經有 threads 權限
+            if ".threads.net" in line:
+                has_threads = True
+            
+            # 如果這行是 instagram 的權限，就複製一份改給 threads
+            if ".instagram.com" in line:
+                # 把 .instagram.com 替換成 .threads.net
+                new_line = line.replace(".instagram.com", ".threads.net")
+                new_lines.append(new_line)
+        
+        # 寫回檔案
+        with open(cookie_path, 'w', encoding='utf-8') as f:
+            f.writelines(new_lines)
+            
+        return True
+    except Exception as e:
+        print(f"Cookie patch failed: {e}")
+        return False
+
+# --- 下載核心 ---
 def download_video(raw_url, use_cookies=True):
     safe_clean_temp_dir()
     timestamp = int(time.time())
     output_path = f"{TEMP_DIR}/video_{timestamp}.%(ext)s"
     
-    # 1. 強制網址修正
+    # 1. 網址修正
     final_url = raw_url.strip()
     if "threads.com" in final_url:
         final_url = final_url.replace("threads.com", "threads.net")
@@ -72,7 +102,6 @@ def download_video(raw_url, use_cookies=True):
 
     st.write(f"⚙️ 鎖定網址: {final_url}")
     
-    # 2. V16 改回 Windows Chrome (為了匹配你的電腦版 Cookies)
     user_agent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36'
 
     ydl_opts = {
@@ -89,7 +118,10 @@ def download_video(raw_url, use_cookies=True):
     cookie_to_use = None
     if use_cookies:
         if "instagram.com" in final_url.lower() or "threads.net" in final_url.lower():
-            if os.path.exists(IG_COOKIE_FILE): cookie_to_use = IG_COOKIE_FILE
+            if os.path.exists(IG_COOKIE_FILE): 
+                # 🔥 下載前先執行魔改 🔥
+                patch_cookies_for_threads(IG_COOKIE_FILE)
+                cookie_to_use = IG_COOKIE_FILE
         elif "facebook.com" in final_url.lower() or "fb.watch" in final_url.lower():
             if os.path.exists(FB_COOKIE_FILE): cookie_to_use = FB_COOKIE_FILE
         
@@ -97,7 +129,6 @@ def download_video(raw_url, use_cookies=True):
 
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            # 3. 嘗試解析
             info = ydl.extract_info(final_url, download=True)
             return ydl.prepare_filename(info), info.get('title', 'video'), cookie_to_use, None
     except Exception as e:
@@ -105,8 +136,8 @@ def download_video(raw_url, use_cookies=True):
 
 # --- 主介面 ---
 def main():
-    st.title("🦄 全能下載器 V16.0")
-    st.caption("身分同步 + 引擎版本檢測")
+    st.title("🦄 全能下載器 V17.0")
+    st.caption("餅乾魔改版 (IG/Threads 權限通吃)")
 
     if not os.path.exists(TEMP_DIR): os.makedirs(TEMP_DIR, exist_ok=True)
 
@@ -121,7 +152,11 @@ def main():
         ig_file = st.file_uploader("IG Cookies (Threads 通用)", type=["txt"], key="ig_uploader")
         if ig_file is not None:
             with open(IG_COOKIE_FILE, "wb") as f: f.write(ig_file.getbuffer())
-            st.success("✅ IG Cookies 更新成功")
+            # 上傳後馬上執行一次魔改，確保權限正確
+            if patch_cookies_for_threads(IG_COOKIE_FILE):
+                st.success("✅ IG Cookies 更新並擴充 Threads 權限！")
+            else:
+                st.success("✅ IG Cookies 更新成功")
 
         fb_file = st.file_uploader("FB Cookies", type=["txt"], key="fb_uploader")
         if fb_file is not None:
@@ -130,28 +165,21 @@ def main():
             
         if os.path.exists(IG_COOKIE_FILE): st.caption("✅ IG 憑證: OK")
         
-        # 🔥 V16.0 顯示引擎版本 (關鍵！) 🔥
         try:
             ver = yt_dlp.version.__version__
             st.info(f"Engine Ver: {ver}")
-            # 如果版本不是 2024 或 2025 開頭，代表引擎太舊
-            if not ver.startswith("2024") and not ver.startswith("2025"):
-                st.error("⚠️ 引擎版本過舊！請執行 Reboot。")
-        except:
-            st.caption("Engine Ver: Unknown")
+        except: pass
 
     st.divider()
     
     input_url = st.text_input("貼上影片連結")
-    
-    # 預設勾選 Cookies (因為 V16 是為了配合 Cookies 設計的)
     use_cookies_toggle = st.checkbox("🍪 掛載 Cookies (強烈建議勾選)", value=True)
 
     if st.button("🔍 解析並下載", type="primary", use_container_width=True):
         if not input_url:
             st.warning("請輸入網址")
         else:
-            with st.status("🚀 啟動 V16 引擎 (Windows 模式)...", expanded=True) as status:
+            with st.status("🚀 啟動 V17 引擎 (自動適配權限)...", expanded=True) as status:
                 path, title, cookie, err_msg = download_video(input_url, use_cookies=use_cookies_toggle)
                 
                 if path and os.path.exists(path):
